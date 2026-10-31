@@ -2,16 +2,16 @@
    큰 화면에서는 가운데 한 칸으로만 넓어집니다. */
 
 :root {
-  --bg: #111111;
-  --bg2: #1a1a1a;
-  --card: #1e1e1e;
-  --line: #2e2e2e;
-  --ink: #f0f0f0;
-  --muted: #888888;
+  --bg: #f5f5f5;
+  --bg2: #eeeeee;
+  --card: #ffffff;
+  --line: #ddd;
+  --ink: #111111;
+  --muted: #777777;
   --brand: #e11d48;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --miss: #fb7185;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --miss: #e11d48;
   --radius: 12px;
 }
 
@@ -108,9 +108,9 @@ button {
   font: inherit; font-weight: 700; border: 0; border-radius: 14px;
   width: 100%; padding: 17px; cursor: pointer;
 }
-.primary { background: var(--brand); color: #0e1030; }
+.primary { background: var(--brand); color: #fff; }
 .primary:disabled { background: var(--line); color: var(--muted); cursor: default; }
-.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.ghost { background: transparent; color: #555; border: 1px solid var(--line); }
 .actions { display: grid; gap: 10px; margin-top: 26px; }
 
 /* 진행 */
@@ -129,7 +129,7 @@ button {
   transition: transform .06s ease, border-color .15s ease;
 }
 .choice:active { transform: scale(.985); }
-.choice[aria-pressed="true"] { border-color: var(--brand); background: #2d0818; }
+.choice[aria-pressed="true"] { border-color: var(--brand); background: #fce4ec; color: var(--brand); }
 
 /* 슬라이더 */
 .slider-out {
@@ -173,9 +173,10 @@ input[type=range]::-moz-range-thumb {
 
 /* 결과 — 촌평 */
 .ai {
-  background: linear-gradient(135deg, #2a2f5c, #21243f);
+  background: #f0f0f5;
   border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px 17px; font-size: 14.5px; margin-bottom: 16px;
+  color: var(--ink);
 }
 .ai .tag { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
 .ai .nick { color: var(--brand); font-weight: 700; }
