@@ -39,7 +39,7 @@ SEOUL = (37.5665, 126.9780)
 # 열대야가 15일에서 12일로 바뀌었다. 출처에 모델까지 적어야 다시 받아도 같은 값이 나온다.
 ERA5 = "&models=era5"
 
-SOURCES: list[tuple[str, str, str]] = [
+SOURCES: list[tuple[str, ...]] = [
     # (저장 파일명, 설명, URL)
     ("seoul_weather.json",
      "서울 일별 기온·강수 1950~2024 (Open-Meteo Archive · ERA5 고정)",
@@ -121,10 +121,15 @@ SOURCES: list[tuple[str, str, str]] = [
      "?format=geojson&starttime=2000-01-01&endtime=2024-12-31"
      "&minmagnitude=3.0&minlatitude=33&maxlatitude=39.5"
      "&minlongitude=124&maxlongitude=132&limit=20000"),
+
+    ("seoul_bus_routes.xlsx",
+     "서울시 버스 노선별 정류소 정보 2026.09 (서울 열린데이터광장 OA-1095)",
+     "https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false",
+     "infId=OA-1095&seq=58&infSeq=2"),
 ]
 
 
-def get(url: str, dest: Path, tries: int = 4) -> int:
+def get(url: str, dest: Path, tries: int = 4, post_data: str | None = None) -> int:
     """받는다. 잠깐의 실패면 기다렸다가 다시 시도한다.
 
     공개 API 는 대부분 호출 제한이 있고(429), 큰 파일은 받다가 끊기기도 한다
@@ -134,7 +139,8 @@ def get(url: str, dest: Path, tries: int = 4) -> int:
     wait = 5
     for i in range(tries):
         try:
-            req = urllib.request.Request(url, headers=UA)
+            body = post_data.encode() if post_data else None
+            req = urllib.request.Request(url, data=body, headers=UA)
             with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
                 data = r.read()
             dest.write_bytes(data)
@@ -157,14 +163,16 @@ def main() -> int:
     force = "--force" in sys.argv
     RAW.mkdir(parents=True, exist_ok=True)
     fail = 0
-    for name, desc, url in SOURCES:
+    for src in SOURCES:
+        name, desc, url = src[0], src[1], src[2]
+        post_data = src[3] if len(src) > 3 else None
         dest = RAW / name
         if dest.exists() and not force:
             print(f"  건너뜀  {name:<22} 이미 있음 ({dest.stat().st_size/1024:,.0f}KB)")
             continue
         t0 = time.time()
         try:
-            n = get(url, dest)
+            n = get(url, dest, post_data=post_data)
             print(f"  받음    {name:<22} {n/1024:>7,.0f}KB  {time.time()-t0:.1f}s  {desc}")
         except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as e:
             print(f"  실패    {name:<22} {e}")

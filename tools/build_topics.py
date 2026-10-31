@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import sys
 import datetime as dt
 from collections import Counter
@@ -682,6 +683,113 @@ topic(
     ])
 
 
+# ── 12. 서울 버스 ───────────────────────────────────────────────
+import openpyxl
+
+_bwb = openpyxl.load_workbook(RAW / "seoul_bus_routes.xlsx", read_only=True)
+_bws = _bwb["Data"]
+_bus_routes: dict[int, dict] = {}
+for _row in _bws.iter_rows(min_row=2, values_only=True):
+    _rid, _rname, _seq, _nid, _ars, _sname, _bx, _by = _row
+    if _rid not in _bus_routes:
+        _bus_routes[_rid] = {"name": str(_rname), "stops": []}
+    _bus_routes[_rid]["stops"].append((_seq, _bx, _by, _sname))
+_bwb.close()
+
+bus_total = len(_bus_routes)
+
+bus_stop_counts = {rid: len(d["stops"]) for rid, d in _bus_routes.items()}
+bus_max_stops_rid = max(bus_stop_counts, key=bus_stop_counts.get)
+bus_max_stops = bus_stop_counts[bus_max_stops_rid]
+bus_max_stops_name = _bus_routes[bus_max_stops_rid]["name"]
+
+
+def _haversine(lat1, lon1, lat2, lon2):
+    R = 6371
+    dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+_bus_lengths: dict[int, float] = {}
+for _rid, _d in _bus_routes.items():
+    _sorted = sorted(_d["stops"], key=lambda s: s[0])
+    _total = 0.0
+    for _i in range(1, len(_sorted)):
+        _, _x1, _y1, _ = _sorted[_i - 1]
+        _, _x2, _y2, _ = _sorted[_i]
+        if _x1 and _y1 and _x2 and _y2:
+            _total += _haversine(_y1, _x1, _y2, _x2)
+    _bus_lengths[_rid] = _total
+
+bus_avg_length = mean(_bus_lengths.values())
+bus_above_avg = sum(1 for v in _bus_lengths.values() if v > bus_avg_length)
+bus_above_pct = bus_above_avg / len(_bus_lengths) * 100
+bus_longest_rid = max(_bus_lengths, key=_bus_lengths.get)
+bus_longest_km = _bus_lengths[bus_longest_rid]
+bus_longest_name = _bus_routes[bus_longest_rid]["name"]
+
+_stop_route_count: Counter = Counter()
+for _d in _bus_routes.values():
+    _seen: set = set()
+    for _, _, _, _sn in _d["stops"]:
+        if _sn and _sn not in _seen:
+            _stop_route_count[_sn] += 1
+            _seen.add(_sn)
+bus_hub_name, bus_hub_cnt = _stop_route_count.most_common(1)[0]
+_hub_candidates = ["서울역버스환승센터", "강남역", "홍대입구역", "영등포역"]
+if bus_hub_name not in _hub_candidates:
+    _hub_candidates[0] = bus_hub_name
+elif bus_hub_name != _hub_candidates[0]:
+    _hub_candidates.remove(bus_hub_name)
+    _hub_candidates.insert(0, bus_hub_name)
+
+topic(
+    "seoul-bus", "🚌", "서울 시내버스",
+    "서울 시내버스 노선과 정류소 데이터 (2026.09 기준)",
+    "서울 열린데이터광장 (OA-1095)",
+    "https://data.seoul.go.kr/dataList/OA-1095/L/1/datasetView.do",
+    [
+        slider("b1",
+               "서울 시내버스 노선은 모두 몇 개일까요?",
+               bus_total, "개", 200, 1200, 10,
+               f"2026년 9월 기준 서울시 버스 노선 {bus_total}개",
+               "매일 타면서도 전체가 몇 개인지는 잘 모릅니다."),
+        slider("b2",
+               "정류소를 가장 많이 거치는 노선의 정류소 개수는?",
+               bus_max_stops, "개", 30, 250, 5,
+               f"{bus_max_stops_name}번 노선 {bus_max_stops}개 정류소",
+               "내가 타는 노선의 정류소 수부터 떠올리면, 최다 노선은 훨씬 멀리 "
+               "있습니다."),
+        slider("b3",
+               f"노선 길이가 평균({bus_avg_length:.0f}km)을 넘는 노선은 전체의 몇 %일까요?",
+               bus_above_pct, "%", 10, 70, 1,
+               f"평균 {bus_avg_length:.1f}km 초과 노선 {bus_above_avg}개 / "
+               f"{bus_total}개 ({bus_above_pct:.1f}%)",
+               "평균을 넘는 쪽이 절반일 것 같지만, 짧은 노선이 많아서 평균이 "
+               "끌려올라갑니다."),
+        choice("b4",
+               "가장 많은 노선이 지나가는 정류소는?",
+               _hub_candidates, bus_hub_name,
+               f"{bus_hub_name} {bus_hub_cnt}개 노선 경유",
+               "내가 환승하는 곳이 가장 복잡할 것 같지만, 실제 허브는 따로 "
+               "있습니다."),
+        slider("b5",
+               "가장 긴 버스 노선의 총 거리는 약 몇 km일까요?",
+               bus_longest_km, "km", 30, 250, 5,
+               f"{bus_longest_name}번 노선 약 {bus_longest_km:.1f}km "
+               f"(정류소 간 직선거리 합산)",
+               "서울 안만 다니는 줄 알지만 광역 노선은 도시를 벗어나 꽤 먼 곳까지 "
+               "갑니다."),
+    ],
+    caveat="이 데이터에는 심야(N)·새벽·출퇴근 전용·한강버스·광역 노선이 일반 "
+           "시내버스와 구분 없이 섞여 있고, 노선 길이는 정류소 좌표 간 직선거리 "
+           "합산이라 실제 도로 거리보다 짧으며, 2026년 9월 한 시점의 스냅샷이므로 "
+           "노선 신설·폐지에 따라 다른 달에는 숫자가 달라집니다.")
+
+
 # ════════════════════════════════════════════════════════════════
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
@@ -726,7 +834,9 @@ def main() -> None:
     }, ensure_ascii=False, indent=2))
 
     # 사람이 읽는 정답지
-    md = ["# 문항 정답지 — 10주제 50문항", "",
+    n_topics = len(TOPICS)
+    n_questions = sum(len(t["questions"]) for t in TOPICS)
+    md = [f"# 문항 정답지 — {n_topics}주제 {n_questions}문항", "",
           "> 모든 값은 `data/raw/` 의 원본에서 `tools/build_topics.py` 가 계산합니다.", ""]
     for t in TOPICS:
         md += [f"## {t['emoji']} {t['title']}", "",
