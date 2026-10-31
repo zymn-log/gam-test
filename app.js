@@ -11,6 +11,7 @@ let INDEX = null;     // topics.json
 let PACK = null;      // 지금 푸는 주제
 let idx = 0;
 let answers = [];
+let selectedTopic = null;
 
 const DONE_KEY = "gam-test-done";
 
@@ -67,7 +68,17 @@ function directionOf(q, mine) {
 
 function show(name) {
   Object.entries(views).forEach(([k, el]) => (el.hidden = k !== name));
+  $("cta-wrap").hidden = name !== "home";
   window.scrollTo({ top: 0 });
+}
+
+function renderDate() {
+  const d = new Date();
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const h = d.getHours();
+  const edition = h < 12 ? "조간" : "석간";
+  $("hero-date").textContent =
+    `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${dow}요일 ${edition}`;
 }
 
 /* ── 시작 ────────────────────────────────────────── */
@@ -75,6 +86,7 @@ async function boot() {
   INDEX = await (await fetch("topics.json")).json();
   $("title").textContent = INDEX.title;
   $("subtitle").textContent = INDEX.subtitle;
+  renderDate();
 
   const p = new URLSearchParams(location.search);
   if (p.has("s")) {
@@ -87,9 +99,11 @@ async function boot() {
   }
 
   renderGrid();
+  $("cta-wrap").hidden = false;
+  $("btn-start").onclick = () => { if (selectedTopic) start(selectedTopic); };
   $("btn-next").onclick = next;
   $("btn-back").onclick = () => show("home");
-  $("btn-more").onclick = () => { renderGrid(); show("home"); };
+  $("btn-more").onclick = () => { renderGrid(); show("home"); $("cta-wrap").hidden = false; };
   $("btn-share").onclick = share;
   if (p.has("t")) {
     const t = INDEX.topics.find((x) => x.id === p.get("t"));
@@ -97,7 +111,28 @@ async function boot() {
   }
 }
 
+function selectTopic(id) {
+  const btn = $("btn-start");
+  if (selectedTopic === id) {
+    selectedTopic = null;
+    document.querySelectorAll(".tcard").forEach((c) => c.classList.remove("selected"));
+    btn.disabled = true;
+    btn.textContent = "문제를 골라야 시작돼요";
+    return;
+  }
+  selectedTopic = id;
+  document.querySelectorAll(".tcard").forEach((c) =>
+    c.classList.toggle("selected", c.dataset.id === id));
+  btn.disabled = false;
+  btn.textContent = "지금 바로 맞혀보기!";
+}
+
 function renderGrid() {
+  selectedTopic = null;
+  const btn = $("btn-start");
+  btn.disabled = true;
+  btn.textContent = "문제를 골라야 시작돼요";
+
   const done = doneMap();
   const n = INDEX.topics.filter((t) => t.id in done).length;
   $("progress-note").textContent =
@@ -106,12 +141,15 @@ function renderGrid() {
   INDEX.topics.forEach((t) => {
     const b = document.createElement("button");
     b.className = "tcard" + (t.id in done ? " done" : "");
+    b.dataset.id = t.id;
     b.innerHTML =
       `<span class="temoji">${t.emoji}</span>` +
-      `<span class="ttitle">${t.title}</span>` +
-      `<span class="tblurb">${t.blurb}</span>` +
+      `<div class="tinfo">` +
+        `<span class="ttitle">${t.title}</span>` +
+        `<span class="tblurb">${t.blurb}</span>` +
+      `</div>` +
       (t.id in done ? `<span class="tscore">${done[t.id]}점</span>` : "");
-    b.onclick = () => start(t.id);
+    b.onclick = () => selectTopic(t.id);
     $("topic-grid").appendChild(b);
   });
 }
